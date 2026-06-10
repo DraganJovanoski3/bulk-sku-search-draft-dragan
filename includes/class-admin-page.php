@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Admin page for Bulk SKU Search & Draft.
  */
@@ -114,7 +114,7 @@ class BSSDD_Admin_Page {
 
 		$offset = max( 0, (int) ( $_POST['offset'] ?? 0 ) );
 
-		$cached = get_transient( bssdd_get_transient_key() );
+		$cached = get_transient( BSSDD_TRANSIENT_KEY );
 		if ( ! is_array( $cached ) || empty( $cached['draftable_ids'] ) ) {
 			wp_send_json_error(
 				array( 'message' => __( 'Search results expired. Please run the search again.', 'bulk-sku-search-draft-dragan' ) ),
@@ -215,7 +215,7 @@ class BSSDD_Admin_Page {
 				$results = $result;
 			}
 		} else {
-			$cached = get_transient( bssdd_get_transient_key() );
+			$cached = get_transient( BSSDD_TRANSIENT_KEY );
 			if ( is_array( $cached ) ) {
 				$results = $cached;
 				$input   = $cached['input'] ?? '';
@@ -255,7 +255,7 @@ class BSSDD_Admin_Page {
 			'searched_at'    => time(),
 		);
 
-		set_transient( bssdd_get_transient_key(), $results, HOUR_IN_SECONDS );
+		set_transient( BSSDD_TRANSIENT_KEY, $results, HOUR_IN_SECONDS );
 
 		return $results;
 	}
@@ -270,7 +270,7 @@ class BSSDD_Admin_Page {
 	private function render_search_form( $input, $results, $error ) {
 		?>
 		<div class="wrap bssdd-wrap">
-			<h1><?php esc_html_e( 'Bulk SKU Search Dragan', 'bulk-sku-search-draft-dragan' ); ?></h1>
+			<h1><?php esc_html_e( 'Bulk SKU Search', 'bulk-sku-search-draft-dragan' ); ?></h1>
 			<p>
 				<?php
 				printf(

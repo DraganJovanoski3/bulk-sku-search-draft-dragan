@@ -1,8 +1,8 @@
-﻿<?php
+<?php
 /**
  * Plugin Name: Bulk SKU Search & Draft Dragan
- * Description: Search WooCommerce products by up to 500 SKUs at once and bulk-set published matches to draft. Per-user search sessions for multi-user workflows.
- * Version: 1.0.0
+ * Description: Search WooCommerce products by up to 500 SKUs at once and bulk-set published matches to draft.
+ * Version: 1.1.0
  * Author: Dragan Jovanoski
  * Requires at least: 5.8
  * Requires PHP: 7.4
@@ -12,30 +12,19 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'BSSDD_VERSION', '1.0.0' );
+define( 'BSSDD_VERSION', '1.1.0' );
 define( 'BSSDD_PLUGIN_FILE', __FILE__ );
 define( 'BSSDD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BSSDD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'BSSDD_MAX_SKUS', apply_filters( 'bssdd_max_skus', 500 ) );
 define( 'BSSDD_BATCH_SIZE', apply_filters( 'bssdd_batch_size', 50 ) );
-define( 'BSSDD_TRANSIENT_PREFIX', 'bssdd_search_results_' );
+define( 'BSSDD_TRANSIENT_KEY', 'bssdd_search_results' );
 
 require_once BSSDD_PLUGIN_DIR . 'includes/class-sku-parser.php';
 require_once BSSDD_PLUGIN_DIR . 'includes/class-sku-finder.php';
 require_once BSSDD_PLUGIN_DIR . 'includes/class-draft-processor.php';
 require_once BSSDD_PLUGIN_DIR . 'includes/class-sku-updater.php';
 require_once BSSDD_PLUGIN_DIR . 'includes/class-admin-page.php';
-
-/**
- * Get per-user transient key for search results.
- *
- * @return string
- */
-function bssdd_get_transient_key() {
-	$user_id = get_current_user_id();
-
-	return BSSDD_TRANSIENT_PREFIX . ( $user_id > 0 ? $user_id : 0 );
-}
 
 /**
  * Bootstrap the plugin after plugins are loaded.

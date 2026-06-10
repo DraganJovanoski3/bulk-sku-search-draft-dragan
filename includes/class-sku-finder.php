@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Bulk WooCommerce SKU lookup.
  */

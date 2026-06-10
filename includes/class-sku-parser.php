@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Parse SKU lists from textarea input.
  */

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Batch draft processor for published WooCommerce products.
  */

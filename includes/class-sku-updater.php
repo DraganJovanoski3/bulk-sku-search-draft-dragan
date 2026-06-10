@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Update product SKU via WooCommerce API.
  */
@@ -92,7 +92,7 @@ class BSSDD_SKU_Updater {
 	 * @param string $new_sku    Updated SKU.
 	 */
 	public static function update_cached_results( $product_id, $new_sku ) {
-		$cached = get_transient( bssdd_get_transient_key() );
+		$cached = get_transient( BSSDD_TRANSIENT_KEY );
 		if ( ! is_array( $cached ) || empty( $cached['found'] ) ) {
 			return;
 		}
@@ -105,6 +105,6 @@ class BSSDD_SKU_Updater {
 			$cached['found'][ $index ]['sku'] = $new_sku;
 		}
 
-		set_transient( bssdd_get_transient_key(), $cached, HOUR_IN_SECONDS );
+		set_transient( BSSDD_TRANSIENT_KEY, $cached, HOUR_IN_SECONDS );
 	}
 }
