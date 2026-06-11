@@ -139,6 +139,17 @@
 	padding: 2px 6px;
 }
 
+.bssdd-sku-target {
+	font-size: 12px;
+	color: #2271b1;
+}
+
+.bssdd-sku-target code {
+	font-size: 12px;
+	background: #f0f6fc;
+	padding: 2px 6px;
+}
+
 .bssdd-sku-editor {
 	margin-top: 4px;
 }
@@ -161,6 +172,15 @@
 }
 
 .bssdd-sku-feedback.is-error {
+	color: #d63638;
+}
+
+.bssdd-sku-display-feedback {
+	font-size: 12px;
+	color: #00a32a;
+}
+
+.bssdd-sku-display-feedback.is-error {
 	color: #d63638;
 }
 

@@ -26,7 +26,16 @@ class BSSDD_SKU_Finder {
 			return self::empty_result();
 		}
 
-		$placeholders = implode( ', ', array_fill( 0, count( $skus ), '%s' ) );
+		$lookup_values = array();
+
+		foreach ( $skus as $sku ) {
+			foreach ( BSSDD_SKU_Parser::sku_lookup_variants( $sku ) as $variant ) {
+				$lookup_values[] = BSSDD_SKU_Parser::normalize_sku( $variant );
+			}
+		}
+
+		$lookup_values = array_values( array_unique( $lookup_values ) );
+		$placeholders  = implode( ', ', array_fill( 0, count( $lookup_values ), '%s' ) );
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$sql = $wpdb->prepare(
@@ -37,7 +46,7 @@ class BSSDD_SKU_Finder {
 			AND pm.meta_value != ''
 			AND p.post_type IN ('product', 'product_variation')
 			AND LOWER(TRIM(pm.meta_value)) IN ($placeholders)",
-			...array_map( array( 'BSSDD_SKU_Parser', 'normalize_sku' ), $skus )
+			...$lookup_values
 		);
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -75,19 +84,37 @@ class BSSDD_SKU_Finder {
 		$not_found = array();
 
 		foreach ( $skus as $input_sku ) {
-			$normalized = BSSDD_SKU_Parser::normalize_sku( $input_sku );
+			$matched_rows = array();
+			$seen_rows    = array();
 
-			if ( isset( $matches_by_normalized[ $normalized ] ) ) {
-				foreach ( $matches_by_normalized[ $normalized ] as $match ) {
-					$found[] = array_merge(
-						$match,
-						array(
-							'input_sku' => $input_sku,
-						)
-					);
+			foreach ( $matches_by_normalized as $matches ) {
+				foreach ( $matches as $match ) {
+					if ( ! BSSDD_SKU_Parser::skus_equivalent( $input_sku, $match['sku'] ?? '' ) ) {
+						continue;
+					}
+
+					$row_key = (int) ( $match['product_id'] ?? 0 ) . ':' . BSSDD_SKU_Parser::normalize_sku( $input_sku );
+					if ( isset( $seen_rows[ $row_key ] ) ) {
+						continue;
+					}
+
+					$seen_rows[ $row_key ]    = true;
+					$matched_rows[]           = $match;
 				}
-			} else {
+			}
+
+			if ( empty( $matched_rows ) ) {
 				$not_found[] = $input_sku;
+				continue;
+			}
+
+			foreach ( $matched_rows as $match ) {
+				$found[] = array_merge(
+					$match,
+					array(
+						'input_sku' => $input_sku,
+					)
+				);
 			}
 		}
 

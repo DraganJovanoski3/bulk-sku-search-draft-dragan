@@ -11,6 +11,7 @@ class BSSDD_Admin_Page {
 	const NONCE_SEARCH     = 'bssdd_search_skus';
 	const NONCE_DRAFT      = 'bssdd_draft_products';
 	const NONCE_SKU        = 'bssdd_update_sku';
+	const NONCE_PREFIX_ZERO = 'bssdd_prefix_zero_sku';
 	const PER_PAGE         = 50;
 
 	/**
@@ -34,6 +35,7 @@ class BSSDD_Admin_Page {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_ajax_bssdd_draft_batch', array( $this, 'ajax_draft_batch' ) );
 		add_action( 'wp_ajax_bssdd_update_sku', array( $this, 'ajax_update_sku' ) );
+		add_action( 'wp_ajax_bssdd_prefix_zero_batch', array( $this, 'ajax_prefix_zero_batch' ) );
 	}
 
 	/**
@@ -80,20 +82,25 @@ class BSSDD_Admin_Page {
 			'bssddAdmin',
 			array(
 				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-				'nonce'     => wp_create_nonce( self::NONCE_DRAFT ),
-				'skuNonce'  => wp_create_nonce( self::NONCE_SKU ),
-				'batchSize' => (int) BSSDD_BATCH_SIZE,
-				'i18n'      => array(
-					'confirmDraft' => __( 'This will set %d published product(s) to draft. Continue?', 'bulk-sku-search-draft-dragan' ),
-					'drafting'     => __( 'Setting products to draft…', 'bulk-sku-search-draft-dragan' ),
-					'complete'     => __( 'Draft update complete.', 'bulk-sku-search-draft-dragan' ),
-					'error'        => __( 'An error occurred. Please try again.', 'bulk-sku-search-draft-dragan' ),
-					'editSku'      => __( 'Edit SKU', 'bulk-sku-search-draft-dragan' ),
-					'saveSku'      => __( 'Save', 'bulk-sku-search-draft-dragan' ),
-					'cancelSku'    => __( 'Cancel', 'bulk-sku-search-draft-dragan' ),
-					'savingSku'    => __( 'Saving…', 'bulk-sku-search-draft-dragan' ),
-					'skuSaved'     => __( 'SKU saved.', 'bulk-sku-search-draft-dragan' ),
-					'skuFailed'    => __( 'Could not save SKU.', 'bulk-sku-search-draft-dragan' ),
+				'nonce'           => wp_create_nonce( self::NONCE_DRAFT ),
+				'skuNonce'        => wp_create_nonce( self::NONCE_SKU ),
+				'prefixZeroNonce' => wp_create_nonce( self::NONCE_PREFIX_ZERO ),
+				'batchSize'       => (int) BSSDD_BATCH_SIZE,
+				'i18n'            => array(
+					'confirmDraft'      => __( 'This will set %d published product(s) to draft. Continue?', 'bulk-sku-search-draft-dragan' ),
+					'drafting'          => __( 'Setting products to draft…', 'bulk-sku-search-draft-dragan' ),
+					'complete'          => __( 'Draft update complete.', 'bulk-sku-search-draft-dragan' ),
+					'error'             => __( 'An error occurred. Please try again.', 'bulk-sku-search-draft-dragan' ),
+					'editSku'           => __( 'Edit SKU', 'bulk-sku-search-draft-dragan' ),
+					'saveSku'           => __( 'Save', 'bulk-sku-search-draft-dragan' ),
+					'cancelSku'         => __( 'Cancel', 'bulk-sku-search-draft-dragan' ),
+					'savingSku'         => __( 'Saving…', 'bulk-sku-search-draft-dragan' ),
+					'skuSaved'          => __( 'SKU saved.', 'bulk-sku-search-draft-dragan' ),
+					'skuFailed'         => __( 'Could not save SKU.', 'bulk-sku-search-draft-dragan' ),
+					'addLeadingZero'    => __( 'Add 0', 'bulk-sku-search-draft-dragan' ),
+					'confirmPrefixZero' => __( 'This will add a leading 0 to %d SKU(s). Continue?', 'bulk-sku-search-draft-dragan' ),
+					'prefixingZero'     => __( 'Adding leading 0…', 'bulk-sku-search-draft-dragan' ),
+					'prefixZeroComplete' => __( 'Leading 0 update complete.', 'bulk-sku-search-draft-dragan' ),
 				),
 			)
 		);
@@ -194,6 +201,72 @@ class BSSDD_Admin_Page {
 	}
 
 	/**
+	 * AJAX handler: add a leading zero to SKUs in batches.
+	 */
+	public function ajax_prefix_zero_batch() {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error(
+				array( 'message' => __( 'Permission denied.', 'bulk-sku-search-draft-dragan' ) ),
+				403
+			);
+		}
+
+		check_ajax_referer( self::NONCE_PREFIX_ZERO, 'nonce' );
+
+		$offset = max( 0, (int) ( $_POST['offset'] ?? 0 ) );
+
+		$cached = get_transient( BSSDD_TRANSIENT_KEY );
+		if ( ! is_array( $cached ) || empty( $cached['found'] ) ) {
+			wp_send_json_error(
+				array( 'message' => __( 'Search results expired. Please run the search again.', 'bulk-sku-search-draft-dragan' ) ),
+				400
+			);
+		}
+
+		$all_ids = array_map( 'absint', (array) ( $cached['prefixable_ids'] ?? array() ) );
+		if ( empty( $all_ids ) ) {
+			$all_ids = BSSDD_SKU_Updater::get_prefixable_ids( $cached['found'] );
+		}
+
+		if ( empty( $all_ids ) ) {
+			wp_send_json_error(
+				array( 'message' => __( 'No SKUs need a leading zero.', 'bulk-sku-search-draft-dragan' ) ),
+				400
+			);
+		}
+		$batch   = array_slice( $all_ids, $offset, BSSDD_BATCH_SIZE );
+
+		if ( empty( $batch ) ) {
+			wp_send_json_success(
+				array(
+					'done'      => true,
+					'offset'    => $offset,
+					'total'     => count( $all_ids ),
+					'succeeded' => 0,
+					'failed'    => 0,
+					'skipped'   => 0,
+					'errors'    => array(),
+				)
+			);
+		}
+
+		$result     = BSSDD_SKU_Updater::process_leading_zero_batch( $batch );
+		$new_offset = $offset + count( $batch );
+
+		wp_send_json_success(
+			array(
+				'done'      => $new_offset >= count( $all_ids ),
+				'offset'    => $new_offset,
+				'total'     => count( $all_ids ),
+				'succeeded' => (int) $result['succeeded'],
+				'failed'    => (int) $result['failed'],
+				'skipped'   => (int) $result['skipped'],
+				'errors'    => array_slice( $result['errors'], 0, 10 ),
+			)
+		);
+	}
+
+	/**
 	 * Render the admin page.
 	 */
 	public function render_page() {
@@ -252,6 +325,7 @@ class BSSDD_Admin_Page {
 			'not_found'      => $search['not_found'],
 			'summary'        => $search['summary'],
 			'draftable_ids'  => BSSDD_SKU_Finder::get_draftable_ids( $search['found'] ),
+			'prefixable_ids' => BSSDD_SKU_Updater::get_prefixable_ids( $search['found'] ),
 			'searched_at'    => time(),
 		);
 
@@ -323,8 +397,12 @@ class BSSDD_Admin_Page {
 	private function render_results( $results ) {
 		$summary       = $results['summary'] ?? array();
 		$draftable     = (int) ( $summary['draftable'] ?? 0 );
-		$draftable_ids = array_map( 'absint', (array) ( $results['draftable_ids'] ?? array() ) );
-		$view          = sanitize_key( wp_unslash( $_GET['bssdd_view'] ?? 'found' ) );
+		$draftable_ids   = array_map( 'absint', (array) ( $results['draftable_ids'] ?? array() ) );
+		$prefixable_ids = array_map( 'absint', (array) ( $results['prefixable_ids'] ?? array() ) );
+		if ( empty( $prefixable_ids ) && ! empty( $results['found'] ) ) {
+			$prefixable_ids = BSSDD_SKU_Updater::get_prefixable_ids( $results['found'] );
+		}
+		$view = sanitize_key( wp_unslash( $_GET['bssdd_view'] ?? 'found' ) );
 
 		if ( ! in_array( $view, array( 'found', 'not_found', 'draftable' ), true ) ) {
 			$view = 'found';
@@ -394,7 +472,23 @@ class BSSDD_Admin_Page {
 					);
 					?>
 				</button>
+				<button
+					type="button"
+					id="bssdd-prefix-zero-btn"
+					class="button"
+					data-count="<?php echo esc_attr( (string) count( $prefixable_ids ) ); ?>"
+					<?php disabled( count( $prefixable_ids ) === 0 ); ?>
+				>
+					<?php
+					printf(
+						/* translators: %d: number of SKUs that can get a leading zero */
+						esc_html__( 'Add Leading 0 to SKUs (%d)', 'bulk-sku-search-draft-dragan' ),
+						count( $prefixable_ids )
+					);
+					?>
+				</button>
 				<span id="bssdd-draft-progress" class="bssdd-draft-progress" aria-live="polite"></span>
+				<span id="bssdd-prefix-zero-progress" class="bssdd-draft-progress" aria-live="polite"></span>
 			</div>
 
 			<nav class="nav-tab-wrapper bssdd-view-tabs">
@@ -453,16 +547,29 @@ class BSSDD_Admin_Page {
 						<?php else : ?>
 							<?php foreach ( $page_rows as $row ) : ?>
 								<?php
-								$product_id = (int) ( $row['product_id'] ?? 0 );
-								$sku_value  = (string) ( $row['sku'] ?? $row['input_sku'] ?? '' );
+								$product_id    = (int) ( $row['product_id'] ?? 0 );
+								$sku_value     = (string) ( $row['sku'] ?? $row['input_sku'] ?? '' );
+								$needs_prefix  = BSSDD_SKU_Updater::needs_leading_zero( $sku_value );
+								$prefixed_sku  = BSSDD_SKU_Updater::add_leading_zero( $sku_value );
 								?>
 								<tr data-product-id="<?php echo esc_attr( (string) $product_id ); ?>">
 									<td class="bssdd-sku-cell">
 										<div class="bssdd-sku-display">
 											<code class="bssdd-sku-value"><?php echo esc_html( $sku_value ); ?></code>
+											<?php if ( $needs_prefix ) : ?>
+												<span class="bssdd-sku-target" title="<?php esc_attr_e( 'SKU after adding leading 0', 'bulk-sku-search-draft-dragan' ); ?>">
+													&rarr; <code><?php echo esc_html( $prefixed_sku ); ?></code>
+												</span>
+											<?php endif; ?>
+											<?php if ( $needs_prefix ) : ?>
+												<button type="button" class="button button-small bssdd-sku-prefix-zero-btn" title="<?php esc_attr_e( 'Add leading 0', 'bulk-sku-search-draft-dragan' ); ?>">
+													<?php esc_html_e( 'Add 0', 'bulk-sku-search-draft-dragan' ); ?>
+												</button>
+											<?php endif; ?>
 											<button type="button" class="button button-small bssdd-sku-edit-btn" title="<?php esc_attr_e( 'Edit SKU', 'bulk-sku-search-draft-dragan' ); ?>">
 												<?php esc_html_e( 'Edit SKU', 'bulk-sku-search-draft-dragan' ); ?>
 											</button>
+											<span class="bssdd-sku-display-feedback" aria-live="polite"></span>
 										</div>
 										<div class="bssdd-sku-editor" hidden>
 											<input
